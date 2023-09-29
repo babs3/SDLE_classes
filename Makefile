@@ -11,6 +11,6 @@ Client: Client.c
 	$(CC) $(CFLAGS) -o Client Client.c $(LIBS)
 
 clean:
-	rm -f Server Client
+	rm -f Server Client 
 
 .PHONY: all clean
