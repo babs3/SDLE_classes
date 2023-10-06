@@ -1,58 +1,43 @@
-//  Hello World client
-#include <zmq.h>
-#include <string.h>
-#include <stdio.h>
-#include <unistd.h>
+//  Weather update client
+//  Connects SUB socket to tcp://localhost:5556
+//  Collects weather updates and finds avg temp in zipcode
 
-int main (void)
+// NOTE:
+// The Client input should be something like: ./Client 56670
+
+#include "zhelpers.h"
+
+int main (int argc, char *argv [])
 {
-    printf("Connecting to weather update servers...\n");
-
+    //  Socket to talk to server
+    printf ("Collecting updates from weather server...\n");
     void *context = zmq_ctx_new ();
+    void *subscriber = zmq_socket (context, ZMQ_SUB);
+    int rc = zmq_connect (subscriber, "tcp://localhost:5556");
+    assert (rc == 0);
 
-    //void *requester = zmq_socket (context, ZMQ_REQ);
-    //zmq_connect (requester, "tcp://localhost:5555");
-    
-    // Connect to US weather update server
-    void *requesterUS = zmq_socket (context, ZMQ_REQ);
-    zmq_connect (requesterUS, "tcp://localhost:5555");
+    //  Subscribe to zipcode, default is NYC, 10001
+    const char *filter = (argc > 1)? argv [1]: "10001 ";
+    rc = zmq_setsockopt (subscriber, ZMQ_SUBSCRIBE,
+                         filter, strlen (filter));
+    assert (rc == 0);
 
-    // Connect to PT weather update server
-    void *requesterPT = zmq_socket(context, ZMQ_REQ);
-    zmq_connect(requesterPT, "tcp://localhost:5555");
+    //  Process 100 updates
+    int update_nbr;
+    long total_temp = 0;
+    for (update_nbr = 0; update_nbr < 100; update_nbr++) {
+        char *string = s_recv (subscriber);
 
-    int request_nbr;
-    for (request_nbr = 0; request_nbr != 10; request_nbr++) {
-        /*char buffer [10];
-        printf ("Sending Hello %d…\n", request_nbr);
-        zmq_send (requester, "Hello", 5, 0);
-        zmq_recv (requester, buffer, 10, 0);
-        printf ("Received World %d\n", request_nbr);*/
-
-       if (request_nbr % 2 == 0) {
-            // Send US zip code
-            printf("Sending US zip code\n");
-            zmq_send(requesterUS, "US123", 6, 0);
-
-            char buffer[256];
-            zmq_recv(requesterUS, buffer, sizeof(buffer), 0);
-            printf("Received from US publisher: %s\n", buffer);
-        } else {
-            // Send PT zip code
-            printf("Sending PT zip code\n");
-            zmq_send(requesterPT, "PT456", 6, 0);
-
-            char buffer[256];
-            zmq_recv(requesterPT, buffer, sizeof(buffer), 0);
-            printf("Received from PT publisher: %s\n", buffer);
-        }
-
+        int zipcode, temperature, relhumidity;
+        sscanf (string, "%d %d %d",
+            &zipcode, &temperature, &relhumidity);
+        total_temp += temperature;
+        free (string);
     }
+    printf ("Average temperature for zipcode '%s' was %dF\n",
+        filter, (int) (total_temp / update_nbr));
 
-    //zmq_close (requester);
-    zmq_close(requesterUS);
-    zmq_close(requesterPT);
+    zmq_close (subscriber);
     zmq_ctx_destroy (context);
-
     return 0;
 }
