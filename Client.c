@@ -1,11 +1,6 @@
 //  Reading from multiple sockets
-//  This version uses a simple recv loop
-
-/* The cost of this approach is some additional latency on the first message (the sleep 
-* at the end of the loop, when there are no waiting messages to process). 
-* This would be a problem in applications where submillisecond latency was vital. 
-*/
-
+//  This version uses zmq_poll()
+//  To actually read from multiple sockets all at once, use zmq_poll().
 
 #include "zhelpers.h"
 
@@ -21,25 +16,31 @@ int main (void)
     zmq_connect (subscriber, "tcp://localhost:5556");
     zmq_setsockopt (subscriber, ZMQ_SUBSCRIBE, "10001 ", 6);
 
+    zmq_pollitem_t items [] = {
+        { receiver,   0, ZMQ_POLLIN, 0 },
+        { subscriber, 0, ZMQ_POLLIN, 0 }
+    };
+
     int iterations = 100;
     int total_temp = 0;
     //  Process messages from both sockets
-    //  We prioritize traffic from the task ventilator
     while (1) {
         char msg [256];
-        while (1) {
-            int size = zmq_recv (receiver, msg, 255, ZMQ_DONTWAIT);
+
+        zmq_poll (items, 2, -1); // is called to wait for events on the specified sockets
+        if (items [0].revents & ZMQ_POLLIN) {
+            int size = zmq_recv (receiver, msg, 255, 0);
             if (size != -1) {
                 //  Process task
-                // don't know what to do here ...
+                printf("Received task: %.*s\n", size, msg);  // Print the task
+                // Add your task processing logic here
             }
-            else
-                break;
         }
-        while (1) {
-            int size = zmq_recv (subscriber, msg, 255, ZMQ_DONTWAIT);
+        if (items [1].revents & ZMQ_POLLIN) {
+            int size = zmq_recv (subscriber, msg, 255, 0);
             if (size != -1) {
                 //  Process weather update
+
                 int zipcode, temperature, relhumidity;
                 sscanf(msg, "%d %d %d", &zipcode, &temperature, &relhumidity);
 
@@ -53,22 +54,14 @@ int main (void)
                     printf("Average temperature for zipcode '%d' was %dF\n", zipcode, (int)(total_temp / 100)); // initially iterations = 100
                     break;
                 }
-
+                //break;
             }
-
-            else
-                break;
         }
-        //  No activity, so sleep for 1 msec
-        s_sleep (1);
-        
-        if (!iterations) break;
-
     }
 
-    zmq_close (receiver);
     zmq_close (subscriber);
     zmq_ctx_destroy (context);
 
     return 0;
 }
+
