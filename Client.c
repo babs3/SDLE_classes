@@ -1,49 +1,74 @@
-// Weather update client
-// Connects SUB socket to tcp://localhost:5556
-// Collects weather updates and finds avg temp in zipcode
+//  Reading from multiple sockets
+//  This version uses a simple recv loop
 
-// NOTE:
-// The Client input should be something like: ./Client 56670
+/* The cost of this approach is some additional latency on the first message (the sleep 
+* at the end of the loop, when there are no waiting messages to process). 
+* This would be a problem in applications where submillisecond latency was vital. 
+*/
+
 
 #include "zhelpers.h"
-#include <stdio.h>
 
-int main(int argc, char *argv[])
+int main (void) 
 {
-    // Socket to talk to server
-    printf("Collecting updates from weather server...\n");
-    void *context = zmq_ctx_new();
-    void *subscriber = zmq_socket(context, ZMQ_SUB);
-    int rc = zmq_connect(subscriber, "tcp://localhost:5556");
-    assert(rc == 0);
+    //  Connect to task ventilator
+    void *context = zmq_ctx_new ();
+    void *receiver = zmq_socket (context, ZMQ_PULL);
+    zmq_connect (receiver, "tcp://localhost:5557");
 
-    // Subscribe to zipcode, default is 10001
-    const char *filter = (argc > 1) ? argv[1] : "10001";
-    // The effect of this line is to instruct the subscriber socket to subscribe to messages
-    // that match the specified filter, which is the zipcode in this case. 
-    // Any message received by the subscriber will only be delivered if it starts with the specified zipcode.
-    rc = zmq_setsockopt(subscriber, ZMQ_SUBSCRIBE, filter, strlen(filter));
-    assert(rc == 0);
+    //  Connect to weather server
+    void *subscriber = zmq_socket (context, ZMQ_SUB);
+    zmq_connect (subscriber, "tcp://localhost:5556");
+    zmq_setsockopt (subscriber, ZMQ_SUBSCRIBE, "10001 ", 6);
 
-    // Process 100 updates
-    int update_nbr;
-    long total_temp = 0;
-    for (update_nbr = 0; update_nbr < 10; update_nbr++)
-    {
-        char *string = s_recv(subscriber);
+    int iterations = 100;
+    int total_temp = 0;
+    //  Process messages from both sockets
+    //  We prioritize traffic from the task ventilator
+    while (1) {
+        char msg [256];
+        while (1) {
+            int size = zmq_recv (receiver, msg, 255, ZMQ_DONTWAIT);
+            if (size != -1) {
+                //  Process task
+                // don't know what to do here ...
+            }
+            else
+                break;
+        }
+        while (1) {
+            int size = zmq_recv (subscriber, msg, 255, ZMQ_DONTWAIT);
+            if (size != -1) {
+                //  Process weather update
+                int zipcode, temperature, relhumidity;
+                sscanf(msg, "%d %d %d", &zipcode, &temperature, &relhumidity);
 
-        int zipcode, temperature, relhumidity;
-        sscanf(string, "%d %d %d", &zipcode, &temperature, &relhumidity);
+                // Print the received weather update
+                printf("Received weather update: %05d %d %d\n", zipcode, temperature, relhumidity);
 
-        // Print the received weather update
-        printf("Received weather update: %05d %d %d\n", zipcode, temperature, relhumidity);
+                total_temp += temperature; 
+                iterations--;
 
-        total_temp += temperature;
-        free(string);
+                if (!iterations) {
+                    printf("Average temperature for zipcode '%d' was %dF\n", zipcode, (int)(total_temp / 100)); // initially iterations = 100
+                    break;
+                }
+
+            }
+
+            else
+                break;
+        }
+        //  No activity, so sleep for 1 msec
+        s_sleep (1);
+        
+        if (!iterations) break;
+
     }
-    printf("Average temperature for zipcode '%s' was %dF\n", filter, (int)(total_temp / update_nbr));
 
-    zmq_close(subscriber);
-    zmq_ctx_destroy(context);
+    zmq_close (receiver);
+    zmq_close (subscriber);
+    zmq_ctx_destroy (context);
+
     return 0;
 }

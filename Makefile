@@ -1,6 +1,6 @@
 CC = gcc
-CFLAGS = -Wall -Wextra -pedantic
-LIBS = -lzmq lpthread
+CFLAGS = -Wextra -pedantic
+LIBS = -lzmq -lpthread
 
 all: Server Client
 
