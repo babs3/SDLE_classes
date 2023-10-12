@@ -12,6 +12,10 @@ int main (void)
     zmq_bind (frontend, "tcp://*:5559"); // Binds a ROUTER socket to tcp://*:5559 (client connection)
     zmq_bind (backend,  "tcp://*:5560"); // Binds a DEALER socket to tcp://*:5560 (worker connection)
 
+    //  Start the proxy
+    zmq_proxy (frontend, backend, NULL);
+
+/* All this code was substituted by 'zmq_proxy'
     //  Initialize poll set
     zmq_pollitem_t items [] = {
         { frontend, 0, ZMQ_POLLIN, 0 },
@@ -46,6 +50,8 @@ int main (void)
             }
         }
     }
+*/
+
     //  We never get here, but clean up anyhow
     zmq_close (frontend);
     zmq_close (backend);

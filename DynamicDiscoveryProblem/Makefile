@@ -2,7 +2,7 @@ CC = gcc
 CFLAGS = -Wextra -pedantic
 LIBS = -lzmq -lpthread
 
-all: Client Worker Broker
+all: Client Worker Proxy
 
 Client: Client.c
 	$(CC) $(CFLAGS) -o Client Client.c $(LIBS)
@@ -10,10 +10,10 @@ Client: Client.c
 Worker: Worker.c
 	$(CC) $(CFLAGS) -o Worker Worker.c $(LIBS)
 
-Broker: Broker.c
-	$(CC) $(CFLAGS) -o Broker Broker.c $(LIBS)
+Proxy: Proxy.c
+	$(CC) $(CFLAGS) -o Proxy Proxy.c $(LIBS)
 
 clean:
-	rm -f Client Worker Broker
+	rm -f Client Worker Proxy
 
 .PHONY: all clean
